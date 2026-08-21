@@ -18,7 +18,7 @@ jobs:
   windows-debug:
     runs-on: windows-latest
     env:
-      VCPKG_ROOT: ${{ github.workspace }}\\vcpkg
+      RETOPRIME_VCPKG_ROOT: ${{ github.workspace }}\\retoprime-vcpkg
 
     steps:
       - name: Check out repository
@@ -30,8 +30,8 @@ jobs:
       - name: Set up vcpkg
         shell: pwsh
         run: |
-          git clone https://github.com/microsoft/vcpkg.git $env:VCPKG_ROOT
-          & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat"
+          git clone https://github.com/microsoft/vcpkg.git $env:RETOPRIME_VCPKG_ROOT
+          & "$env:RETOPRIME_VCPKG_ROOT\bootstrap-vcpkg.bat"
 
       - name: Configure windows-debug preset
         shell: pwsh
