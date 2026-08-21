@@ -1,0 +1,42 @@
+{
+  "name": "retoprime",
+  "version-string": "1.0.0",
+  "dependencies": [
+    {
+      "name": "qtbase",
+      "default-features": false,
+      "features": [
+        "widgets"
+      ]
+    },
+    {
+      "name": "assimp"
+    },
+    {
+      "name": "eigen3"
+    },
+    {
+      "name": "catch2"
+    }
+  ],
+  "overrides": [
+    {
+      "name": "qtbase",
+      "version": "6.11.1",
+      "port-version": 1
+    },
+    {
+      "name": "assimp",
+      "version": "6.0.4",
+      "port-version": 3
+    },
+    {
+      "name": "eigen3",
+      "version": "5.0.1"
+    },
+    {
+      "name": "catch2",
+      "version": "3.15.3"
+    }
+  ]
+}
