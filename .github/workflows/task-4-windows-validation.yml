@@ -1,0 +1,73 @@
+name: Task 4 Windows QuadriFlow Validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/task-4-windows-validation.yml
+      - CMakeLists.txt
+      - cmake/**
+      - src/core/MeshIO.*
+      - src/core/RetopoEngine.*
+      - tests/cmake/**
+      - tests/core/RetopoEngineTests.cpp
+      - tests/core/RetopoProcessIntegration*
+      - tests/helpers/RetopoLongRunningHelper.cpp
+      - tests/fixtures/cube-triangulated.obj
+      - vcpkg.json
+      - vcpkg-configuration.json
+
+jobs:
+  msvc-release-engine:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      RETOPRIME_VCPKG_ROOT: ${{ github.workspace }}\\retoprime-vcpkg
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up MSVC developer command prompt
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Bootstrap pinned-registry vcpkg client
+        shell: pwsh
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git $env:RETOPRIME_VCPKG_ROOT
+          & "$env:RETOPRIME_VCPKG_ROOT\bootstrap-vcpkg.bat" -disableMetrics
+          "VCPKG_ROOT=$env:RETOPRIME_VCPKG_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Configure clean process-enabled release build
+        shell: pwsh
+        run: >-
+          cmake -S . -B build/task-4-windows -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_CXX_COMPILER=cl
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+          -DVCPKG_TARGET_TRIPLET=x64-windows
+          -DRETOPRIME_ENABLE_QUADRIFLOW_EXTERNAL=ON
+          -DRETOPRIME_ALLOW_NO_QPROCESS_FOR_TESTS=OFF
+          -DBUILD_TESTING=ON
+
+      - name: Build app, pinned free-license engine, and all tests
+        shell: pwsh
+        run: cmake --build build/task-4-windows --target retoprime_release RETOPRIME_tests
+
+      - name: Re-stage a deleted helper incrementally
+        shell: pwsh
+        run: |
+          $stagedHelper = Join-Path $PWD 'build\task-4-windows\src\app\engine\retoprime-quads.exe'
+          if (-not (Test-Path $stagedHelper)) {
+            throw "Expected staged helper not found at $stagedHelper"
+          }
+          Remove-Item $stagedHelper
+          cmake --build build/task-4-windows --target retoprime_release
+          if (-not (Test-Path $stagedHelper)) {
+            throw "Incremental release build did not restore $stagedHelper"
+          }
+
+      - name: Run full suite including real cube and process tests
+        shell: pwsh
+        run: ctest --test-dir build/task-4-windows --output-on-failure --timeout 180

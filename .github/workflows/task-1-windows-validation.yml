@@ -1,0 +1,66 @@
+name: Task 1 Windows Validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/task-1-windows-validation.yml
+      - CMakeLists.txt
+      - CMakePresets.json
+      - cmake/**
+      - src/**
+      - tests/**
+      - vcpkg.json
+      - vcpkg-configuration.json
+
+jobs:
+  windows-debug:
+    runs-on: windows-latest
+    env:
+      RETOPRIME_VCPKG_ROOT: ${{ github.workspace }}\\retoprime-vcpkg
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up MSVC developer command prompt
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Set up vcpkg
+        shell: pwsh
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git $env:RETOPRIME_VCPKG_ROOT
+          & "$env:RETOPRIME_VCPKG_ROOT\bootstrap-vcpkg.bat"
+          "VCPKG_ROOT=$env:RETOPRIME_VCPKG_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Configure windows-debug preset
+        shell: pwsh
+        run: cmake --preset windows-debug
+
+      - name: Build windows-debug preset
+        shell: pwsh
+        run: cmake --build --preset windows-debug
+
+      - name: Run AppMetadata ctest filter
+        shell: pwsh
+        run: ctest --preset windows-debug -R AppMetadata --output-on-failure
+
+      - name: Launch bounded smoke
+        shell: pwsh
+        run: |
+          $exePath = Join-Path $PWD 'build\windows-debug\src\app\RETOPRIME.exe'
+          if (-not (Test-Path $exePath)) {
+            throw "Expected executable not found at $exePath"
+          }
+
+          $process = Start-Process -FilePath $exePath -PassThru
+          Start-Sleep -Seconds 5
+
+          if ($process.HasExited) {
+            if ($process.ExitCode -ne 0) {
+              throw "RETOPRIME exited early with code $($process.ExitCode)"
+            }
+          } else {
+            Stop-Process -Id $process.Id -Force
+          }
