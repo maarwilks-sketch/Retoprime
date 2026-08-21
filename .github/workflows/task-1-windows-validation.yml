@@ -2,6 +2,17 @@ name: Task 1 Windows Validation
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/task-1-windows-validation.yml
+      - CMakeLists.txt
+      - CMakePresets.json
+      - cmake/**
+      - src/**
+      - tests/**
+      - vcpkg.json
+      - vcpkg-configuration.json
 
 jobs:
   windows-debug:
