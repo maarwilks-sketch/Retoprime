@@ -178,7 +178,7 @@ bool hasProtectedCurrentUserOnlyAcl(const std::filesystem::path& directory)
     bool userOnly = false;
     if (oneAce) {
         const auto* ace = static_cast<const ACCESS_ALLOWED_ACE*>(rawAce);
-        const auto* aceSid = reinterpret_cast<PSID>(
+        PSID aceSid = reinterpret_cast<PSID>(
             const_cast<DWORD*>(&ace->SidStart));
         userOnly = ace->Header.AceType == ACCESS_ALLOWED_ACE_TYPE &&
                    EqualSid(aceSid, tokenUser->User.Sid) &&
