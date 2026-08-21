@@ -1,0 +1,27 @@
+name: Build Windows EXE
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build tools
+        run: python -m pip install -r requirements-build.txt
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+      - name: Build RETOPRIME.exe
+        run: python -m PyInstaller --noconfirm --clean RETOPRIME.spec
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: RETOPRIME-Windows
+          path: dist/RETOPRIME.exe
+          if-no-files-found: error
