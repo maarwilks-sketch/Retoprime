@@ -18,6 +18,7 @@ function(retoprime_add_quadriflow_external application_target)
 
     set(quadriflow_cmake_args
         -DCMAKE_BUILD_TYPE=Release
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5
         -DBUILD_FREE_LICENSE=ON
         -DBUILD_GUROBI=OFF
         -DBUILD_LOG=OFF
