@@ -10,20 +10,72 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      RETOPRIME_VCPKG_ROOT: ${{ github.workspace }}\\retoprime-vcpkg
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up MSVC developer command prompt
+        uses: ilammy/msvc-dev-cmd@v1
         with:
-          python-version: "3.12"
-      - name: Install build tools
-        run: python -m pip install -r requirements-build.txt
-      - name: Run tests
-        run: python -m unittest discover -s tests -v
-      - name: Build RETOPRIME.exe
-        run: python -m PyInstaller --noconfirm --clean RETOPRIME.spec
-      - name: Upload executable
+          arch: x64
+      - name: Bootstrap vcpkg client
+        shell: pwsh
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git $env:RETOPRIME_VCPKG_ROOT
+          & "$env:RETOPRIME_VCPKG_ROOT\bootstrap-vcpkg.bat" -disableMetrics
+          "VCPKG_ROOT=$env:RETOPRIME_VCPKG_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Configure native release build
+        shell: pwsh
+        run: >-
+          cmake -S . -B build/windows-release -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_CXX_COMPILER=cl
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+          -DVCPKG_TARGET_TRIPLET=x64-windows
+          -DRETOPRIME_ENABLE_QUADRIFLOW_EXTERNAL=ON
+          -DRETOPRIME_ALLOW_NO_QPROCESS_FOR_TESTS=OFF
+          -DBUILD_TESTING=OFF
+      - name: Build RETOPRIME and QuadriFlow
+        shell: pwsh
+        run: cmake --build build/windows-release --target retoprime_release
+      - name: Stage portable application
+        shell: pwsh
+        run: |
+          $appDir = Join-Path $PWD 'build\windows-release\src\app'
+          $packageDir = Join-Path $PWD 'build\windows-release\package'
+          $packageExe = Join-Path $packageDir 'RETOPRIME.exe'
+          $windeployqt = Join-Path $PWD 'build\windows-release\vcpkg_installed\x64-windows\tools\Qt6\bin\windeployqt.exe'
+          New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
+          Copy-Item -Path (Join-Path $appDir '*') -Destination $packageDir -Recurse -Force
+          if (-not (Test-Path $windeployqt)) { throw "windeployqt not found at $windeployqt" }
+          & $windeployqt --release --no-translations --compiler-runtime $packageExe
+          if ($LASTEXITCODE -ne 0) { throw "windeployqt failed with exit code $LASTEXITCODE" }
+          $licenseDir = Join-Path $packageDir 'licenses'
+          New-Item -ItemType Directory -Force -Path $licenseDir | Out-Null
+          Copy-Item 'installer\licenses\QuadriFlow-LICENSE.txt' $licenseDir
+          if (-not (Test-Path 'build\windows-release\package\RETOPRIME.exe')) { throw 'Packaged RETOPRIME.exe is missing' }
+          if (-not (Test-Path 'build\windows-release\package\engine\retoprime-quads.exe')) { throw 'Packaged QuadriFlow helper is missing' }
+      - name: Smoke test portable application
+        shell: pwsh
+        run: |
+          $packageDir = Join-Path $PWD 'build\windows-release\package'
+          $exePath = Join-Path $packageDir 'RETOPRIME.exe'
+          $process = Start-Process -FilePath $exePath -WorkingDirectory $packageDir -PassThru
+          Start-Sleep -Seconds 5
+          if ($process.HasExited) {
+            if ($process.ExitCode -ne 0) { throw "Packaged RETOPRIME exited with code $($process.ExitCode)" }
+          } else {
+            Stop-Process -Id $process.Id -Force
+          }
+      - name: Create portable ZIP
+        shell: pwsh
+        run: Compress-Archive -Path 'build\windows-release\package\*' -DestinationPath 'build\windows-release\RETOPRIME-Windows.zip' -Force
+      - name: Upload portable ZIP
         uses: actions/upload-artifact@v4
         with:
           name: RETOPRIME-Windows
-          path: dist/RETOPRIME.exe
+          path: build/windows-release/RETOPRIME-Windows.zip
           if-no-files-found: error
