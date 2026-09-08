@@ -87,6 +87,10 @@ function(retoprime_add_quadriflow_external application_target)
         GIT_PROGRESS TRUE
         UPDATE_DISCONNECTED TRUE
         LIST_SEPARATOR "|"
+        PATCH_COMMAND
+            "${CMAKE_COMMAND}"
+                "-DQUADRIFLOW_SOURCE_DIR=<SOURCE_DIR>"
+                -P "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/PatchQuadriFlow.cmake"
         CMAKE_ARGS ${quadriflow_cmake_args}
         BUILD_COMMAND
             "${CMAKE_COMMAND}" --build <BINARY_DIR> --config Release --target quadriflow
