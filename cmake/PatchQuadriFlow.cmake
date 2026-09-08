@@ -28,7 +28,7 @@ if(old_flags_position EQUAL -1)
     )
 endif()
 
-set(replacement
+string(CONCAT replacement
     "if(MSVC)\n"
     "    set(CMAKE_CXX_FLAGS_RELEASE \"/MD /O2 /Ob2 /DNDEBUG\")\n"
     "else()\n"
