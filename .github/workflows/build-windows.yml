@@ -13,7 +13,7 @@ jobs:
     timeout-minutes: 120
     env:
       RETOPRIME_VCPKG_ROOT: ${{ github.workspace }}\\retoprime-vcpkg
-      VCPKG_DEFAULT_BINARY_CACHE: ${{ runner.temp }}/retoprime-vcpkg-cache
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/retoprime-vcpkg-cache
 
     steps:
       - name: Check out repository
