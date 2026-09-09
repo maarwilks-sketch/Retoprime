@@ -7,6 +7,14 @@ if(NOT EXISTS "${quadriflow_cmake_lists}")
     message(FATAL_ERROR "QuadriFlow CMakeLists.txt was not found at ${quadriflow_cmake_lists}")
 endif()
 
+# main.cpp calls assert directly and must not rely on Eigen including it.
+# Release builds define NDEBUG, which changes Eigen's transitive includes.
+set(main_cpp "${QUADRIFLOW_SOURCE_DIR}/src/main.cpp")
+file(READ "${main_cpp}" main_contents)
+if(NOT main_contents MATCHES "#include <cassert>")
+    file(WRITE "${main_cpp}" "#include <cassert>\n${main_contents}")
+endif()
+
 file(READ "${quadriflow_cmake_lists}" contents)
 set(old_release_flags
     "set(CMAKE_CXX_FLAGS_RELEASE \"-O3\")  # enable assert"

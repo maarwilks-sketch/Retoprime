@@ -9,6 +9,12 @@ project(
 
 include(CTest)
 
+add_test(NAME CMake.QuadriFlowPatch
+    COMMAND "${CMAKE_COMMAND}"
+        "-DRETOPRIME_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
+        "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/patch-test"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/cmake/QuadriFlowPatchCase.cmake")
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -79,6 +85,7 @@ endif()
 
 add_executable(RETOPRIME
     src/app/main.cpp
+    src/app/DesktopWindow.cpp
 )
 
 set_target_properties(RETOPRIME PROPERTIES
@@ -100,6 +107,7 @@ retoprime_set_project_warnings(RETOPRIME)
 target_link_libraries(RETOPRIME
     PRIVATE
         Qt6::Widgets
+        retoprime_core
 )
 
 add_executable(AppMetadataTests
@@ -268,6 +276,12 @@ if(TARGET RetopoProcessIntegrationTests)
 endif()
 
 if(RETOPRIME_ENABLE_QUADRIFLOW_EXTERNAL)
+    add_test(NAME Desktop.ImportRetopologizeExport
+        COMMAND "${CMAKE_COMMAND}"
+            "-DAPP=$<TARGET_FILE:RETOPRIME>"
+            "-DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/cube-triangulated.obj"
+            "-DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/desktop-smoke.obj"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/cmake/DesktopSmoke.cmake")
     add_test(
         NAME RetopoEngine.RealQuadriFlowCube
         COMMAND

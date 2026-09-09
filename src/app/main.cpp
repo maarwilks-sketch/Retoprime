@@ -3,6 +3,9 @@
 #include <QMainWindow>
 #include <QString>
 #include <QVersionNumber>
+#ifndef RETOPRIME_NO_APP_MAIN
+#include "app/DesktopWindow.h"
+#endif
 
 namespace retoprime {
 
@@ -25,10 +28,12 @@ int main(int argc, char **argv)
     QCoreApplication::setApplicationName(retoprime::applicationName());
     QCoreApplication::setApplicationVersion(retoprime::applicationVersion().toString());
 
-    QMainWindow window;
-    window.setWindowTitle(retoprime::applicationName());
-    window.resize(1280, 800);
+    retoprime::DesktopWindow window;
     window.show();
+    const auto arguments = app.arguments();
+    if (arguments.size() == 4 && arguments[1] == "--smoke-test") {
+        window.smokeTest(arguments[2], arguments[3]);
+    }
 
     return app.exec();
 }

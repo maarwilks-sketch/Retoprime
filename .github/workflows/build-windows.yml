@@ -13,6 +13,7 @@ jobs:
     timeout-minutes: 120
     env:
       RETOPRIME_VCPKG_ROOT: ${{ github.workspace }}\\retoprime-vcpkg
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ runner.temp }}/retoprime-vcpkg-cache
 
     steps:
       - name: Check out repository
@@ -25,8 +26,17 @@ jobs:
         shell: pwsh
         run: |
           git clone https://github.com/microsoft/vcpkg.git $env:RETOPRIME_VCPKG_ROOT
+          if ($LASTEXITCODE -ne 0) { throw "vcpkg clone failed" }
           & "$env:RETOPRIME_VCPKG_ROOT\bootstrap-vcpkg.bat" -disableMetrics
+          if ($LASTEXITCODE -ne 0) { throw "vcpkg bootstrap failed" }
+          New-Item -ItemType Directory -Force $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
           "VCPKG_ROOT=$env:RETOPRIME_VCPKG_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Restore compiled dependencies
+        uses: actions/cache/restore@v4
+        id: dependencies
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: retoprime-windows-v1-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
       - name: Configure native release build
         shell: pwsh
         run: >-
@@ -37,25 +47,45 @@ jobs:
           -DVCPKG_TARGET_TRIPLET=x64-windows
           -DRETOPRIME_ENABLE_QUADRIFLOW_EXTERNAL=ON
           -DRETOPRIME_ALLOW_NO_QPROCESS_FOR_TESTS=OFF
-          -DBUILD_TESTING=OFF
+          -DBUILD_TESTING=ON
+      - name: Save compiled dependencies
+        if: steps.dependencies.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: ${{ steps.dependencies.outputs.cache-primary-key }}
       - name: Build RETOPRIME and QuadriFlow
         shell: pwsh
-        run: cmake --build build/windows-release --target retoprime_release
+        run: cmake --build build/windows-release --target retoprime_release RETOPRIME_tests
+      - name: Test engine and desktop workflow
+        shell: pwsh
+        run: ctest --test-dir build/windows-release --output-on-failure --timeout 180
       - name: Stage portable application
         shell: pwsh
         run: |
           $appDir = Join-Path $PWD 'build\windows-release\src\app'
           $packageDir = Join-Path $PWD 'build\windows-release\package'
           $packageExe = Join-Path $packageDir 'RETOPRIME.exe'
-          $windeployqt = Join-Path $PWD 'build\windows-release\vcpkg_installed\x64-windows\tools\Qt6\bin\windeployqt.exe'
+          $installed = Join-Path $PWD 'build\windows-release\vcpkg_installed\x64-windows'
+          $windeployqt = Get-ChildItem (Join-Path $installed 'tools') -Recurse -Filter windeployqt.exe | Select-Object -First 1 -ExpandProperty FullName
           New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
           Copy-Item -Path (Join-Path $appDir '*') -Destination $packageDir -Recurse -Force
-          if (-not (Test-Path $windeployqt)) { throw "windeployqt not found at $windeployqt" }
+          if (-not $windeployqt) { throw "windeployqt was not installed" }
           & $windeployqt --release --no-translations --compiler-runtime $packageExe
           if ($LASTEXITCODE -ne 0) { throw "windeployqt failed with exit code $LASTEXITCODE" }
+          # The helper is a separate executable: its DLLs must be beside it.
+          $helperDir = Join-Path $packageDir 'engine'
+          $helperBuild = Join-Path $PWD 'build\windows-release\quadriflow\src\quadriflow_external-build'
+          Get-ChildItem $helperBuild -Filter *.dll | Copy-Item -Destination $helperDir -Force
+          Get-ChildItem $packageDir -File | Where-Object { $_.Name -match '^(msvcp|vcruntime|concrt).*\.dll$' } | Copy-Item -Destination $helperDir -Force
           $licenseDir = Join-Path $packageDir 'licenses'
           New-Item -ItemType Directory -Force -Path $licenseDir | Out-Null
           Copy-Item 'installer\licenses\QuadriFlow-LICENSE.txt' $licenseDir
+          Get-ChildItem (Join-Path $installed 'share') -Directory | ForEach-Object {
+            $copyright = Join-Path $_.FullName 'copyright'
+            if (Test-Path $copyright) { Copy-Item $copyright (Join-Path $licenseDir ($_.Name + '.txt')) }
+          }
+          Copy-Item 'PORTABLE-README.txt' (Join-Path $packageDir 'README.txt')
           if (-not (Test-Path 'build\windows-release\package\RETOPRIME.exe')) { throw 'Packaged RETOPRIME.exe is missing' }
           if (-not (Test-Path 'build\windows-release\package\engine\retoprime-quads.exe')) { throw 'Packaged QuadriFlow helper is missing' }
       - name: Smoke test portable application
@@ -63,13 +93,15 @@ jobs:
         run: |
           $packageDir = Join-Path $PWD 'build\windows-release\package'
           $exePath = Join-Path $packageDir 'RETOPRIME.exe'
-          $process = Start-Process -FilePath $exePath -WorkingDirectory $packageDir -PassThru
-          Start-Sleep -Seconds 5
-          if ($process.HasExited) {
-            if ($process.ExitCode -ne 0) { throw "Packaged RETOPRIME exited with code $($process.ExitCode)" }
-          } else {
-            Stop-Process -Id $process.Id -Force
-          }
+          $cmake = (Get-Command cmake).Source
+          $inputMesh = Join-Path $PWD 'tests\fixtures\cube-triangulated.obj'
+          $outputMesh = Join-Path $env:RUNNER_TEMP 'retoprime-portable-result.obj'
+          # Do not allow the developer environment to hide missing dependencies.
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          Remove-Item Env:QT_PLUGIN_PATH -ErrorAction SilentlyContinue
+          Remove-Item Env:QT_QPA_PLATFORM_PLUGIN_PATH -ErrorAction SilentlyContinue
+          & $cmake "-DAPP=$exePath" "-DINPUT=$inputMesh" "-DOUTPUT=$outputMesh" -P tests/cmake/DesktopSmoke.cmake
+          if ($LASTEXITCODE -ne 0) { throw "Portable import / retopology / export failed" }
       - name: Create portable ZIP
         shell: pwsh
         run: Compress-Archive -Path 'build\windows-release\package\*' -DestinationPath 'build\windows-release\RETOPRIME-Windows.zip' -Force
