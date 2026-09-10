@@ -61,10 +61,7 @@ jobs:
         shell: pwsh
         run: |
           $installed = Join-Path $PWD 'build\windows-release\vcpkg_installed\x64-windows'
-          $deploy = Get-ChildItem (Join-Path $installed 'tools') -Recurse -Filter windeployqt.exe | Select-Object -First 1 -ExpandProperty FullName
-          if (-not $deploy) { throw 'windeployqt is missing' }
-          & $deploy --release --no-translations --compiler-runtime 'build\windows-release\src\app\RETOPRIME.exe'
-          if ($LASTEXITCODE -ne 0) { throw 'Qt runtime deployment failed' }
+          & .\cmake\DeployWindowsRuntime.ps1 -Installed $installed -AppDirectory 'build\windows-release\src\app'
           ctest --test-dir build/windows-release --output-on-failure --timeout 180
       - name: Stage portable application
         shell: pwsh
@@ -73,12 +70,9 @@ jobs:
           $packageDir = Join-Path $PWD 'build\windows-release\package'
           $packageExe = Join-Path $packageDir 'RETOPRIME.exe'
           $installed = Join-Path $PWD 'build\windows-release\vcpkg_installed\x64-windows'
-          $windeployqt = Get-ChildItem (Join-Path $installed 'tools') -Recurse -Filter windeployqt.exe | Select-Object -First 1 -ExpandProperty FullName
           New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
           Copy-Item -Path (Join-Path $appDir '*') -Destination $packageDir -Recurse -Force
-          if (-not $windeployqt) { throw "windeployqt was not installed" }
-          & $windeployqt --release --no-translations --compiler-runtime $packageExe
-          if ($LASTEXITCODE -ne 0) { throw "windeployqt failed with exit code $LASTEXITCODE" }
+          & .\cmake\DeployWindowsRuntime.ps1 -Installed $installed -AppDirectory $packageDir
           # The helper is a separate executable: its DLLs must be beside it.
           $helperDir = Join-Path $packageDir 'engine'
           $helperBuild = Join-Path $PWD 'build\windows-release\quadriflow\src\quadriflow_external-build'

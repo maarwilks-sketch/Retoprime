@@ -72,8 +72,5 @@ jobs:
         shell: pwsh
         run: |
           $installed = Join-Path $PWD 'build\task-4-windows\vcpkg_installed\x64-windows'
-          $deploy = Get-ChildItem (Join-Path $installed 'tools') -Recurse -Filter windeployqt.exe | Select-Object -First 1 -ExpandProperty FullName
-          if (-not $deploy) { throw 'windeployqt is missing' }
-          & $deploy --release --no-translations --compiler-runtime 'build\task-4-windows\src\app\RETOPRIME.exe'
-          if ($LASTEXITCODE -ne 0) { throw 'Qt runtime deployment failed' }
+          & .\cmake\DeployWindowsRuntime.ps1 -Installed $installed -AppDirectory 'build\task-4-windows\src\app'
           ctest --test-dir build/task-4-windows --output-on-failure --timeout 180
