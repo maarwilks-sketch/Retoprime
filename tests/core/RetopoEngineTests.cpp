@@ -26,8 +26,8 @@ std::filesystem::path qStringPath(const QString& value);
 
 class TemporaryDirectory {
 public:
-    TemporaryDirectory()
-        : path_(std::filesystem::temp_directory_path() /
+    explicit TemporaryDirectory(const std::filesystem::path& root = std::filesystem::temp_directory_path())
+        : path_(root /
                 ("retoprime-engine-" + std::to_string(
                     std::chrono::steady_clock::now().time_since_epoch().count())))
     {
@@ -169,8 +169,8 @@ constexpr auto kQuadOutput =
     "f 1 2 3 4\n";
 
 struct EngineFixture {
-    EngineFixture()
-        : applicationDirectory(temp.path() / "app"),
+    explicit EngineFixture(const std::filesystem::path& root = std::filesystem::temp_directory_path())
+        : temp(root), applicationDirectory(temp.path() / "app"),
           helper(applicationDirectory / "engine" / retoprime::RetopoEngine::helperExecutableName()),
           engine(&process, helper, applicationDirectory),
           observed(engine)
@@ -446,14 +446,19 @@ TEST_CASE("concave polygon triangulation preserves area orientation and source")
 
 TEST_CASE("relative Unicode workspace resolves to an isolated absolute private directory")
 {
-    EngineFixture fixture;
+    // A relative path cannot cross Windows drives (runner TEMP is on C:,
+    // while the checkout can be on D:). Keep this fixture on the working drive.
+    EngineFixture fixture(std::filesystem::current_path());
     const auto unicodeWorkspace = fixture.temp.path() /
                                   qStringPath(QStringLiteral("工作区-é"));
     fixture.request.workspace = std::filesystem::relative(
         unicodeWorkspace, std::filesystem::current_path());
+    REQUIRE_FALSE(fixture.request.workspace.empty());
+    REQUIRE(fixture.request.workspace.is_relative());
 
     fixture.engine.start(fixture.request);
 
+    INFO(fixture.observed.failures.join(QStringLiteral(" | ")).toStdString());
     REQUIRE(fixture.process.starts.size() == 1);
     const auto& started = fixture.process.starts.front();
     CHECK(started.workingDirectory.is_absolute());

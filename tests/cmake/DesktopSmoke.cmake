@@ -2,8 +2,10 @@ if(NOT EXISTS "${APP}" OR NOT EXISTS "${INPUT}")
     message(FATAL_ERROR "APP and INPUT must exist")
 endif()
 file(REMOVE "${OUTPUT}")
-execute_process(COMMAND "${APP}" --smoke-test "${INPUT}" "${OUTPUT}"
-    RESULT_VARIABLE result TIMEOUT 180
+execute_process(COMMAND "${CMAKE_COMMAND}" -E env
+    QT_LOGGING_TO_CONSOLE=1 QT_DEBUG_PLUGINS=1
+    "${APP}" --smoke-test "${INPUT}" "${OUTPUT}"
+    RESULT_VARIABLE result TIMEOUT 165
     OUTPUT_VARIABLE stdout ERROR_VARIABLE stderr)
 if(NOT result STREQUAL "0" OR NOT EXISTS "${OUTPUT}")
     message(FATAL_ERROR "Desktop import / retopology / export failed: ${result}\n${stdout}\n${stderr}")
